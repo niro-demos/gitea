@@ -39,8 +39,8 @@ func buildFilePath(uploadPath *tempdir.TempDir, id string) string {
 }
 
 // NewBlobUploader creates a new blob uploader for the given id
-func NewBlobUploader(ctx context.Context, id string) (*BlobUploader, error) {
-	model, err := packages_model.GetBlobUploadByID(ctx, id)
+func NewBlobUploader(ctx context.Context, id string, ownerID int64, image string) (*BlobUploader, error) {
+	model, err := packages_model.GetBlobUploadByIDAndRepository(ctx, id, ownerID, image)
 	if err != nil {
 		return nil, err
 	}

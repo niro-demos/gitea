@@ -214,6 +214,45 @@ func TestPackageContainer(t *testing.T) {
 		MakeRequest(t, req, http.StatusUnauthorized)
 	})
 
+	t.Run("UploadBlob/NamespaceIsolation", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+
+		ownerURL := fmt.Sprintf("%sv2/%s/namespace-isolation", setting.AppURL, user.Name)
+		req := NewRequest(t, "POST", ownerURL+"/blobs/uploads").AddTokenAuth(userToken)
+		resp := MakeRequest(t, req, http.StatusAccepted)
+		uuid := resp.Header().Get("Docker-Upload-Uuid")
+		require.NotEmpty(t, uuid)
+
+		ownerUploadURL := setting.AppURL + resp.Header().Get("Location")[1:]
+		req = NewRequestWithBody(t, "PATCH", ownerUploadURL, strings.NewReader("A")).AddTokenAuth(userToken)
+		MakeRequest(t, req, http.StatusAccepted)
+
+		assertOwnerCanRead := func() {
+			req := NewRequest(t, "GET", ownerUploadURL).AddTokenAuth(userToken)
+			resp := MakeRequest(t, req, http.StatusNoContent)
+			assert.Equal(t, "0-0", resp.Header().Get("Range"))
+		}
+		assertOwnerCanRead()
+
+		otherUploadURL := fmt.Sprintf("%sv2/%s/namespace-isolation/%s/%s", setting.AppURL, privateUser.Name, "blobs/uploads", uuid)
+		for _, testCase := range []struct {
+			method string
+			url    string
+			body   string
+		}{
+			{method: "GET", url: otherUploadURL},
+			{method: "PATCH", url: otherUploadURL, body: "B"},
+			{method: "PUT", url: otherUploadURL + "?digest=sha256:38164fbd17603d73f696b8b4d72664d735bb6a7c88577687fd2ae33fd6964153"},
+			{method: "DELETE", url: otherUploadURL},
+		} {
+			t.Run(testCase.method, func(t *testing.T) {
+				req := NewRequestWithBody(t, testCase.method, testCase.url, strings.NewReader(testCase.body)).AddBasicAuth(privateUser.Name)
+				MakeRequest(t, req, http.StatusNotFound)
+				assertOwnerCanRead()
+			})
+		}
+	})
+
 	for _, image := range images {
 		t.Run(fmt.Sprintf("[Image:%s]", image), func(t *testing.T) {
 			url := fmt.Sprintf("%sv2/%s/%s", setting.AppURL, user.Name, image)

@@ -318,7 +318,7 @@ func PostBlobsUploads(ctx *context.Context) {
 		return
 	}
 
-	upload, err := packages_model.CreateBlobUpload(ctx)
+	upload, err := packages_model.CreateBlobUpload(ctx, ctx.Package.Owner.ID, image)
 	if err != nil {
 		apiError(ctx, http.StatusInternalServerError, err)
 		return
@@ -336,7 +336,7 @@ func GetBlobsUpload(ctx *context.Context) {
 	image := ctx.PathParam("image")
 	uuid := ctx.PathParam("uuid")
 
-	upload, err := packages_model.GetBlobUploadByID(ctx, uuid)
+	upload, err := packages_model.GetBlobUploadByIDAndRepository(ctx, uuid, ctx.Package.Owner.ID, image)
 	if err != nil {
 		if errors.Is(err, packages_model.ErrPackageBlobUploadNotExist) {
 			apiErrorDefined(ctx, errBlobUploadUnknown)
@@ -363,7 +363,7 @@ func GetBlobsUpload(ctx *context.Context) {
 func PatchBlobsUpload(ctx *context.Context) {
 	image := ctx.PathParam("image")
 
-	uploader, err := container_service.NewBlobUploader(ctx, ctx.PathParam("uuid"))
+	uploader, err := container_service.NewBlobUploader(ctx, ctx.PathParam("uuid"), ctx.Package.Owner.ID, image)
 	if err != nil {
 		if errors.Is(err, packages_model.ErrPackageBlobUploadNotExist) {
 			apiErrorDefined(ctx, errBlobUploadUnknown)
@@ -417,7 +417,7 @@ func PutBlobsUpload(ctx *context.Context) {
 		return
 	}
 
-	uploader, err := container_service.NewBlobUploader(ctx, ctx.PathParam("uuid"))
+	uploader, err := container_service.NewBlobUploader(ctx, ctx.PathParam("uuid"), ctx.Package.Owner.ID, image)
 	if err != nil {
 		if errors.Is(err, packages_model.ErrPackageBlobUploadNotExist) {
 			apiErrorDefined(ctx, errBlobUploadUnknown)
@@ -478,9 +478,10 @@ func PutBlobsUpload(ctx *context.Context) {
 
 // https://docs.docker.com/registry/spec/api/#delete-blob-upload
 func DeleteBlobsUpload(ctx *context.Context) {
+	image := ctx.PathParam("image")
 	uuid := ctx.PathParam("uuid")
 
-	_, err := packages_model.GetBlobUploadByID(ctx, uuid)
+	_, err := packages_model.GetBlobUploadByIDAndRepository(ctx, uuid, ctx.Package.Owner.ID, image)
 	if err != nil {
 		if errors.Is(err, packages_model.ErrPackageBlobUploadNotExist) {
 			apiErrorDefined(ctx, errBlobUploadUnknown)
