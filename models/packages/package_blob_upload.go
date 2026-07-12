@@ -23,6 +23,8 @@ func init() {
 // PackageBlobUpload represents a package blob upload
 type PackageBlobUpload struct {
 	ID             string             `xorm:"pk"`
+	OwnerID        int64              `xorm:"INDEX(owner_image) NOT NULL DEFAULT 0"`
+	Image          string             `xorm:"INDEX(owner_image) NOT NULL DEFAULT ''"`
 	BytesReceived  int64              `xorm:"NOT NULL DEFAULT 0"`
 	HashStateBytes []byte             `xorm:"BLOB"`
 	CreatedUnix    timeutil.TimeStamp `xorm:"created NOT NULL"`
@@ -30,15 +32,33 @@ type PackageBlobUpload struct {
 }
 
 // CreateBlobUpload inserts a blob upload
-func CreateBlobUpload(ctx context.Context) (*PackageBlobUpload, error) {
+func CreateBlobUpload(ctx context.Context, ownerID int64, image string) (*PackageBlobUpload, error) {
 	id := util.CryptoRandomString(25)
 
 	pbu := &PackageBlobUpload{
-		ID: strings.ToLower(id),
+		ID:      strings.ToLower(id),
+		OwnerID: ownerID,
+		Image:   strings.ToLower(image),
 	}
 
 	_, err := db.GetEngine(ctx).Insert(pbu)
 	return pbu, err
+}
+
+// GetBlobUploadByIDAndRepository gets a blob upload by id, owner and image
+func GetBlobUploadByIDAndRepository(ctx context.Context, id string, ownerID int64, image string) (*PackageBlobUpload, error) {
+	pbu := &PackageBlobUpload{}
+
+	has, err := db.GetEngine(ctx).
+		Where("id = ? AND owner_id = ? AND image = ?", id, ownerID, strings.ToLower(image)).
+		Get(pbu)
+	if err != nil {
+		return nil, err
+	}
+	if !has {
+		return nil, ErrPackageBlobUploadNotExist
+	}
+	return pbu, nil
 }
 
 // GetBlobUploadByID gets a blob upload by id

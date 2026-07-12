@@ -5,10 +5,15 @@ package v1_27
 
 import "gitea.dev/models/db"
 
-func BindRepositoryUploads(x db.EngineMigration) error {
+func BindTemporaryUploads(x db.EngineMigration) error {
 	type Upload struct {
 		UploaderID int64 `xorm:"INDEX NOT NULL DEFAULT 0"`
 		RepoID     int64 `xorm:"INDEX NOT NULL DEFAULT 0"`
 	}
-	return x.Sync(new(Upload))
+	type PackageBlobUpload struct {
+		OwnerID int64  `xorm:"INDEX(owner_image) NOT NULL DEFAULT 0"`
+		Image   string `xorm:"INDEX(owner_image) NOT NULL DEFAULT ''"`
+	}
+
+	return x.Sync(new(Upload), new(PackageBlobUpload))
 }
