@@ -216,7 +216,7 @@ func Search(ctx *context.APIContext) {
 				Error: err.Error(),
 			})
 		}
-		results[i] = convert.ToRepo(ctx, repo, permission)
+		results[i] = convert.ToRepoWithDoer(ctx, repo, permission, ctx.Doer)
 	}
 	ctx.SetLinkHeader(count, opts.PageSize)
 	ctx.SetTotalCountHeader(count)

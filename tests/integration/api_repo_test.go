@@ -232,6 +232,30 @@ func TestAPISearchRepo(t *testing.T) {
 	}
 }
 
+func TestAPISearchRepoOwnerEmailPrivacy(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	user := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 5})
+
+	profileReq := NewRequestf(t, "GET", "/api/v1/users/%s", user.Name)
+	profileResp := MakeRequest(t, profileReq, http.StatusOK)
+	profile := DecodeJSON(t, profileResp, &api.User{})
+	require.NotEqual(t, user.Email, profile.Email)
+
+	searchReq := NewRequestf(t, "GET", "/api/v1/repos/search?uid=%d", user.ID)
+	searchResp := MakeRequest(t, searchReq, http.StatusOK)
+	results := DecodeJSON(t, searchResp, &api.SearchResults{})
+	require.NotEmpty(t, results.Data)
+	ownedRepos := 0
+	for _, repo := range results.Data {
+		if repo.Owner.ID != user.ID {
+			continue
+		}
+		ownedRepos++
+		assert.Equal(t, profile.Email, repo.Owner.Email)
+	}
+	require.Positive(t, ownedRepos)
+}
+
 var repoCache = make(map[int64]*repo_model.Repository)
 
 func getRepo(t *testing.T, repoID int64) *repo_model.Repository {

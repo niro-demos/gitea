@@ -13,6 +13,7 @@ import (
 	access_model "gitea.dev/models/perm/access"
 	repo_model "gitea.dev/models/repo"
 	unit_model "gitea.dev/models/unit"
+	user_model "gitea.dev/models/user"
 	"gitea.dev/modules/log"
 	api "gitea.dev/modules/structs"
 	"gitea.dev/modules/util"
@@ -20,10 +21,15 @@ import (
 
 // ToRepo converts a Repository to api.Repository
 func ToRepo(ctx context.Context, repo *repo_model.Repository, permissionInRepo access_model.Permission) *api.Repository {
-	return innerToRepo(ctx, repo, permissionInRepo, false)
+	return innerToRepo(ctx, repo, permissionInRepo, nil, false, false)
 }
 
-func innerToRepo(ctx context.Context, repo *repo_model.Repository, permissionInRepo access_model.Permission, isParent bool) *api.Repository {
+// ToRepoWithDoer converts a Repository using the requester for user privacy checks.
+func ToRepoWithDoer(ctx context.Context, repo *repo_model.Repository, permissionInRepo access_model.Permission, doer *user_model.User) *api.Repository {
+	return innerToRepo(ctx, repo, permissionInRepo, doer, true, false)
+}
+
+func innerToRepo(ctx context.Context, repo *repo_model.Repository, permissionInRepo access_model.Permission, doer *user_model.User, useDoer, isParent bool) *api.Repository {
 	var parent *api.Repository
 
 	if !permissionInRepo.HasUnits() && permissionInRepo.AccessMode > perm.AccessModeNone {
@@ -54,7 +60,7 @@ func innerToRepo(ctx context.Context, repo *repo_model.Repository, permissionInR
 			//        But there isn't a good way to get the permission of the parent repo, because the doer is not passed in.
 			//        Use the permission of the current repo to keep the behavior consistent with the old API.
 			//        Maybe the right way is setting the permission of the parent repo to nil, empty is better than wrong.
-			parent = innerToRepo(ctx, repo.BaseRepo, permissionInRepo, true)
+			parent = innerToRepo(ctx, repo.BaseRepo, permissionInRepo, doer, useDoer, true)
 		}
 	}
 
@@ -192,9 +198,14 @@ func innerToRepo(ctx context.Context, repo *repo_model.Repository, permissionInR
 
 	repoAPIURL := repo.APIURL()
 
+	owner := ToUserWithAccessMode(ctx, repo.Owner, permissionInRepo.AccessMode)
+	if useDoer {
+		owner = ToUser(ctx, repo.Owner, doer)
+	}
+
 	return &api.Repository{
 		ID:                            repo.ID,
-		Owner:                         ToUserWithAccessMode(ctx, repo.Owner, permissionInRepo.AccessMode),
+		Owner:                         owner,
 		Name:                          repo.Name,
 		FullName:                      repo.FullName(),
 		Description:                   repo.Description,
