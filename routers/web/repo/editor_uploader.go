@@ -43,7 +43,7 @@ func UploadFileToServer(ctx *context.Context) {
 
 	// FIXME: need to check the file size according to setting.Repository.Upload.FileMaxSize
 
-	uploaded, err := repo_model.NewUpload(ctx, name, buf, file)
+	uploaded, err := repo_model.NewUpload(ctx, ctx.Doer.ID, ctx.Repo.Repository.ID, name, buf, file)
 	if err != nil {
 		ctx.ServerError("NewUpload", err)
 		return
@@ -55,8 +55,8 @@ func UploadFileToServer(ctx *context.Context) {
 // RemoveUploadFileFromServer remove file from server file dir
 func RemoveUploadFileFromServer(ctx *context.Context) {
 	fileUUID := ctx.FormString("file")
-	if err := repo_model.DeleteUploadByUUID(ctx, fileUUID); err != nil {
-		ctx.ServerError("DeleteUploadByUUID", err)
+	if err := repo_model.DeleteUploadByUUIDForUserAndRepo(ctx, fileUUID, ctx.Doer.ID, ctx.Repo.Repository.ID); err != nil {
+		ctx.ServerError("DeleteUploadByUUIDForUserAndRepo", err)
 		return
 	}
 	ctx.Status(http.StatusNoContent)

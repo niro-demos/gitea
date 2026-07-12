@@ -78,9 +78,9 @@ func UploadRepoFiles(ctx context.Context, repo *repo_model.Repository, doer *use
 		return nil
 	}
 
-	uploads, err := repo_model.GetUploadsByUUIDs(ctx, opts.Files)
+	uploads, err := repo_model.GetUploadsByUUIDsForUserAndRepo(ctx, opts.Files, doer.ID, repo.ID)
 	if err != nil {
-		return fmt.Errorf("GetUploadsByUUIDs [uuids: %v]: %w", opts.Files, err)
+		return fmt.Errorf("GetUploadsByUUIDsForUserAndRepo [uuids: %v]: %w", opts.Files, err)
 	}
 
 	changeOpts := &ChangeRepoFilesOptions{

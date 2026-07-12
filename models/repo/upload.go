@@ -42,9 +42,11 @@ func (err ErrUploadNotExist) Unwrap() error {
 
 // Upload represent a uploaded file to a repo to be deleted when moved
 type Upload struct {
-	ID   int64  `xorm:"pk autoincr"`
-	UUID string `xorm:"uuid UNIQUE"`
-	Name string
+	ID         int64  `xorm:"pk autoincr"`
+	UUID       string `xorm:"uuid UNIQUE"`
+	Name       string
+	UploaderID int64 `xorm:"INDEX NOT NULL DEFAULT 0"`
+	RepoID     int64 `xorm:"INDEX NOT NULL DEFAULT 0"`
 }
 
 func init() {
@@ -58,10 +60,12 @@ func (upload *Upload) LocalPath() string {
 }
 
 // NewUpload creates a new upload object.
-func NewUpload(ctx context.Context, name string, buf []byte, file multipart.File) (_ *Upload, err error) {
+func NewUpload(ctx context.Context, uploaderID, repoID int64, name string, buf []byte, file multipart.File) (_ *Upload, err error) {
 	upload := &Upload{
-		UUID: gouuid.New().String(),
-		Name: name,
+		UUID:       gouuid.New().String(),
+		Name:       name,
+		UploaderID: uploaderID,
+		RepoID:     repoID,
 	}
 
 	localPath := upload.LocalPath()
@@ -111,6 +115,23 @@ func GetUploadsByUUIDs(ctx context.Context, uuids []string) ([]*Upload, error) {
 	return uploads, db.GetEngine(ctx).In("uuid", uuids).Find(&uploads)
 }
 
+// GetUploadsByUUIDsForUserAndRepo returns uploads owned by the user and repository.
+func GetUploadsByUUIDsForUserAndRepo(ctx context.Context, uuids []string, uploaderID, repoID int64) ([]*Upload, error) {
+	if len(uuids) == 0 {
+		return []*Upload{}, nil
+	}
+
+	uploads := make([]*Upload, 0, len(uuids))
+	err := db.GetEngine(ctx).Where("uploader_id=? AND repo_id=?", uploaderID, repoID).In("uuid", uuids).Find(&uploads)
+	if err != nil {
+		return nil, err
+	}
+	if len(uploads) != len(uuids) {
+		return nil, ErrUploadNotExist{}
+	}
+	return uploads, nil
+}
+
 // DeleteUploads deletes multiple uploads
 func DeleteUploads(ctx context.Context, uploads ...*Upload) (err error) {
 	if len(uploads) == 0 {
@@ -151,4 +172,16 @@ func DeleteUploadByUUID(ctx context.Context, uuid string) error {
 	}
 
 	return nil
+}
+
+// DeleteUploadByUUIDForUserAndRepo deletes an upload owned by the user and repository.
+func DeleteUploadByUUIDForUserAndRepo(ctx context.Context, uuid string, uploaderID, repoID int64) error {
+	uploads, err := GetUploadsByUUIDsForUserAndRepo(ctx, []string{uuid}, uploaderID, repoID)
+	if err != nil {
+		if IsErrUploadNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("GetUploadsByUUIDsForUserAndRepo: %w", err)
+	}
+	return DeleteUploads(ctx, uploads...)
 }

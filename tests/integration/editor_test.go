@@ -55,6 +55,46 @@ func TestEditor(t *testing.T) {
 	})
 }
 
+func TestEditorUploadOwnership(t *testing.T) {
+	onGiteaRun(t, func(t *testing.T, _ *url.URL) {
+		uploadFile := func(t *testing.T, session *TestSession, repoPath, name, content string) string {
+			body := &bytes.Buffer{}
+			form := multipart.NewWriter(body)
+			file, err := form.CreateFormFile("file", name)
+			require.NoError(t, err)
+			_, err = io.Copy(file, strings.NewReader(content))
+			require.NoError(t, err)
+			require.NoError(t, form.Close())
+
+			req := NewRequestWithBody(t, "POST", repoPath+"/upload-file", body)
+			req.Header.Set("Content-Type", form.FormDataContentType())
+			resp := session.MakeRequest(t, req, http.StatusOK)
+			return DecodeJSON(t, resp, map[string]string{})["uuid"]
+		}
+
+		ownerSession := loginUser(t, "user2")
+		ownUUID := uploadFile(t, ownerSession, "/user2/repo1", "own-upload.txt", "owned content")
+		resp := testEditorActionPostRequest(t, ownerSession, "/user2/repo1/_upload/master/", map[string]string{
+			"commit_choice": "direct",
+			"files":         ownUUID,
+			"tree_path":     "upload-ownership-control",
+		})
+		require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+		resp = ownerSession.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/raw/branch/master/upload-ownership-control/own-upload.txt"), http.StatusOK)
+		require.Equal(t, "owned content", resp.Body.String())
+
+		foreignSession := loginUser(t, "user5")
+		foreignUUID := uploadFile(t, foreignSession, "/user5/repo4", "foreign-upload.txt", "private staged content")
+		resp = testEditorActionPostRequest(t, ownerSession, "/user2/repo1/_upload/master/", map[string]string{
+			"commit_choice": "direct",
+			"files":         foreignUUID,
+			"tree_path":     "foreign-upload",
+		})
+		assert.NotEqual(t, http.StatusOK, resp.Code)
+		ownerSession.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/raw/branch/master/foreign-upload/foreign-upload.txt"), http.StatusNotFound)
+	})
+}
+
 func testEditorCreateFile(t *testing.T) {
 	session := loginUser(t, "user2")
 	testCreateFile(t, session, "user2", "repo1", "master", "", "test.txt", "Content")
