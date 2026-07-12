@@ -209,7 +209,7 @@ func verifyAuthWithOptions(options *common.VerifyOptions) func(ctx *context.Cont
 			return
 		}
 
-		if !options.SignOutRequired && !options.DisableCrossOriginProtection {
+		if !options.DisableCrossOriginProtection {
 			if err := crossOriginProtection.Check(ctx.Req); err != nil {
 				http.Error(ctx.Resp, err.Error(), http.StatusForbidden)
 				return
